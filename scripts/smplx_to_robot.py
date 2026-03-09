@@ -31,7 +31,6 @@ if __name__ == "__main__":
     parser.add_argument(
         "--robot",
         choices=["unitree_g1", "unitree_g1_with_hands", "unitree_h1", "unitree_h1_2",
-                 "unitree_g1_29dof_lock_waist_fixed_hand_feet_inertia",
                  "booster_t1", "booster_t1_29dof","stanford_toddy", "fourier_n1", 
                 "engineai_pm01", "kuavo_s45", "hightorque_hi", "galaxea_r1pro", "berkeley_humanoid_lite", "booster_k1",
                 "pnd_adam_lite", "openloong", "tienkung", "fourier_gr3"],
@@ -65,13 +64,6 @@ if __name__ == "__main__":
         help="Limit the rate of the retargeted robot motion to keep the same as the human motion.",
     )
 
-    parser.add_argument(
-        "--headless",
-        default=False,
-        action="store_true",
-        help="Run conversion without opening the viewer window. Recommended for batch jobs.",
-    )
-
     args = parser.parse_args()
 
 
@@ -94,27 +86,15 @@ if __name__ == "__main__":
         src_human="smplx",
         tgt_robot=args.robot,
     )
-    if args.headless and args.loop:
-        raise ValueError("--headless cannot be used together with --loop.")
-
-    if args.headless and args.record_video:
-        raise ValueError("--headless cannot be used together with --record_video.")
-
-    if args.headless and args.save_path is None:
-        raise ValueError("--headless requires --save_path so conversion output is persisted.")
-
-    robot_motion_viewer = None
-    if not args.headless:
-        motion_name = pathlib.Path(args.smplx_file).stem
-        robot_motion_viewer = RobotMotionViewer(
-            robot_type=args.robot,
-            motion_fps=aligned_fps,
-            transparent_robot=0,
-            record_video=args.record_video,
-            video_path=f"videos/{args.robot}_{motion_name}.mp4",
-        )
+    
+    robot_motion_viewer = RobotMotionViewer(robot_type=args.robot,
+                                            motion_fps=aligned_fps,
+                                            transparent_robot=0,
+                                            record_video=args.record_video,
+                                            video_path=f"videos/{args.robot}_{args.smplx_file.split('/')[-1].split('.')[0]}.mp4",)
     
 
+    curr_frame = 0
     # FPS measurement variables
     fps_counter = 0
     fps_start_time = time.time()
@@ -126,9 +106,17 @@ if __name__ == "__main__":
             os.makedirs(save_dir, exist_ok=True)
         qpos_list = []
     
-    # Process frames
-    frame_index = 0
-    while frame_index < len(smplx_data_frames):
+    # Start the viewer
+    i = 0
+
+    while True:
+        if args.loop:
+            i = (i + 1) % len(smplx_data_frames)
+        else:
+            i += 1
+            if i >= len(smplx_data_frames):
+                break
+        
         # FPS measurement
         fps_counter += 1
         current_time = time.time()
@@ -139,29 +127,25 @@ if __name__ == "__main__":
             fps_start_time = current_time
         
         # Update task targets.
-        smplx_data = smplx_data_frames[frame_index]
+        smplx_data = smplx_data_frames[i]
 
         # retarget
         qpos = retarget.retarget(smplx_data)
 
-        if robot_motion_viewer is not None:
-            robot_motion_viewer.step(
-                root_pos=qpos[:3],
-                root_rot=qpos[3:7],
-                dof_pos=qpos[7:],
-                human_motion_data=retarget.scaled_human_data,
-                human_pos_offset=np.array([0.0, 0.0, 0.0]),
-                show_human_body_name=False,
-                rate_limit=args.rate_limit,
-                follow_camera=False,
-            )
-
+        # visualize
+        robot_motion_viewer.step(
+            root_pos=qpos[:3],
+            root_rot=qpos[3:7],
+            dof_pos=qpos[7:],
+            human_motion_data=retarget.scaled_human_data,
+            # human_motion_data=smplx_data,
+            human_pos_offset=np.array([0.0, 0.0, 0.0]),
+            show_human_body_name=False,
+            rate_limit=args.rate_limit,
+            follow_camera=False,
+        )
         if args.save_path is not None:
-            qpos_list.append(qpos.copy())
-
-        frame_index += 1
-        if frame_index >= len(smplx_data_frames) and args.loop and not args.headless:
-            frame_index = 0
+            qpos_list.append(qpos)
             
     if args.save_path is not None:
         import pickle
@@ -186,5 +170,4 @@ if __name__ == "__main__":
             
       
     
-    if robot_motion_viewer is not None:
-        robot_motion_viewer.close()
+    robot_motion_viewer.close()
