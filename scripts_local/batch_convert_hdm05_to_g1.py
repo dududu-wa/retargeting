@@ -36,7 +36,12 @@ def parse_args() -> argparse.Namespace:
         default="",
         help="GMR root directory. Default: inferred from this script location.",
     )
-    parser.add_argument("--robot", type=str, default="unitree_g1", help="Target robot name")
+    parser.add_argument(
+        "--robot",
+        type=str,
+        default="unitree_g1_29dof_lock_waist_fixed_hand_feet_inertia",
+        help="Target robot name",
+    )
     parser.add_argument("--python_bin", type=str, default=sys.executable, help="Python executable used for conversion")
     parser.add_argument("--limit", type=int, default=0, help="Process only first N rows (0 means all)")
     parser.add_argument("--overwrite", action="store_true", help="Overwrite existing target .pkl files")

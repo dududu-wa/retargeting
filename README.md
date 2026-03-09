@@ -47,7 +47,8 @@ python scripts_local/make_motion_manifest.py \
 bash scripts_local/batch_convert_hdm05_to_g1.sh \
   data/selected_hdm05_motion_list/manifest_first_batch.csv \
   data/gmr_output_g1/batch \
-  /path/to/GMR
+  /path/to/GMR \
+  unitree_g1_29dof_lock_waist_fixed_hand_feet_inertia
 ```
 
 PowerShell 等价命令：
@@ -56,7 +57,8 @@ PowerShell 等价命令：
 .\scripts_local\batch_convert_hdm05_to_g1.ps1 `
   -ManifestCsv data/selected_hdm05_motion_list/manifest_first_batch.csv `
   -OutputDir data/gmr_output_g1/batch `
-  -GmrRoot .
+  -GmrRoot . `
+  -Robot unitree_g1_29dof_lock_waist_fixed_hand_feet_inertia
 ```
 
 ### 4) 生成质检模板
@@ -84,7 +86,7 @@ bash scripts_local/batch_visualize_g1.sh \
   data/gmr_output_g1/batch \
   videos \
   /path/to/GMR \
-  unitree_g1 \
+  unitree_g1_29dof_lock_waist_fixed_hand_feet_inertia \
   python \
   20
 ```
@@ -96,8 +98,15 @@ PowerShell 等价命令：
   -MotionDir data/gmr_output_g1/batch `
   -VideoDir videos `
   -GmrRoot . `
+  -Robot unitree_g1_29dof_lock_waist_fixed_hand_feet_inertia `
   -MaxFiles 20
 ```
+
+## G1 模型说明
+
+- 当前批处理默认机器人别名为：`unitree_g1_29dof_lock_waist_fixed_hand_feet_inertia`
+- 对应 XML：`g1_description/g1_29dof_lock_waist_with_fixed_hand_rev_1_0.xml`
+- 目标 URDF：`g1_description/g1_29dof_lock_waist_with_fixed_hand_rev_1_0_feet_inertia.urdf`
 
 ## 执行分工
 

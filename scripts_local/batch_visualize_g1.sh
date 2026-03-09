@@ -2,16 +2,16 @@
 set -euo pipefail
 
 if [[ $# -lt 3 ]]; then
-  echo "Usage: $0 <motion_dir> <video_dir> <gmr_root> [robot=unitree_g1] [python_bin=python] [max_files=0]"
+  echo "Usage: $0 <motion_dir> <video_dir> <gmr_root> [robot=unitree_g1_29dof_lock_waist_fixed_hand_feet_inertia] [python_bin=python] [max_files=0]"
   echo "Example:"
-  echo "  $0 data/gmr_output_g1/batch videos /path/to/GMR unitree_g1 python 20"
+  echo "  $0 data/gmr_output_g1/batch videos /path/to/GMR unitree_g1_29dof_lock_waist_fixed_hand_feet_inertia python 20"
   exit 1
 fi
 
 MOTION_DIR="$1"
 VIDEO_DIR="$2"
 GMR_ROOT="$3"
-ROBOT="${4:-unitree_g1}"
+ROBOT="${4:-unitree_g1_29dof_lock_waist_fixed_hand_feet_inertia}"
 PYTHON_BIN="${5:-python}"
 MAX_FILES="${6:-0}"
 

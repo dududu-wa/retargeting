@@ -2,7 +2,7 @@ param(
     [Parameter(Mandatory = $true)][string]$ManifestCsv,
     [Parameter(Mandatory = $true)][string]$OutputDir,
     [Parameter(Mandatory = $true)][string]$GmrRoot,
-    [string]$Robot = "unitree_g1",
+    [string]$Robot = "unitree_g1_29dof_lock_waist_fixed_hand_feet_inertia",
     [string]$PythonBin = "python",
     [int]$Limit = 0,
     [switch]$Overwrite,
