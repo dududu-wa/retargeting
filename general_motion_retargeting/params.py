@@ -1,11 +1,13 @@
 import pathlib
 
 HERE = pathlib.Path(__file__).parent
+PROJECT_ROOT = HERE / ".."
 IK_CONFIG_ROOT = HERE / "ik_configs"
-ASSET_ROOT = HERE / ".." / "assets"
+ASSET_ROOT = PROJECT_ROOT / "assets"
+G1_DESCRIPTION_ROOT = PROJECT_ROOT / "g1_description"
 
 ROBOT_XML_DICT = {
-    "unitree_g1": ASSET_ROOT / "unitree_g1" / "g1_mocap_29dof.xml",
+    "unitree_g1": G1_DESCRIPTION_ROOT / "g1_29dof_lock_waist_with_fixed_hand_rev_1_0_feet_inertia.urdf",
     "unitree_g1_with_hands": ASSET_ROOT / "unitree_g1" / "g1_mocap_29dof_with_hands.xml",
     "unitree_h1": ASSET_ROOT / "unitree_h1" / "h1.xml",
     "unitree_h1_2": ASSET_ROOT / "unitree_h1_2" / "h1_2_handless.xml",

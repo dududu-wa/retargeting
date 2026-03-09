@@ -2,6 +2,7 @@ import xml.etree.ElementTree as ET
 
 import numpy as np
 import torch
+from scipy.spatial.transform import Rotation as R
 
 from . import torch_utils
 
@@ -85,6 +86,8 @@ class KinematicsModel:
         
         if self._file_path.endswith('.xml'):
             self._parse_xml()
+        elif self._file_path.endswith('.urdf'):
+            self._parse_urdf()
         else:
             raise NotImplementedError('File type not supported')
         
@@ -161,6 +164,130 @@ class KinematicsModel:
             return body_index
         
         _add_xml_body(xml_body_root, -1, 0)
+
+    def _parse_urdf(self):
+        tree = ET.parse(self._file_path)
+        urdf_doc_root = tree.getroot()
+        assert urdf_doc_root.tag == "robot", "robot root not found"
+
+        # URDF joint limits are in radians by default.
+        self._rot_unit = "radian"
+
+        links = [link.attrib["name"] for link in urdf_doc_root.findall("link")]
+        children_by_parent = {}
+        joint_by_child = {}
+        child_links = set()
+
+        for joint in urdf_doc_root.findall("joint"):
+            joint_name = joint.attrib.get("name", "<unnamed_joint>")
+            joint_type = joint.attrib.get("type", "fixed")
+
+            parent_node = joint.find("parent")
+            child_node = joint.find("child")
+            assert parent_node is not None and child_node is not None, f"Invalid URDF joint: {joint_name}"
+            parent_link = parent_node.attrib.get("link")
+            child_link = child_node.attrib.get("link")
+            assert parent_link is not None and child_link is not None, f"Invalid URDF joint link in: {joint_name}"
+
+            origin_node = joint.find("origin")
+            pos = np.zeros(3, dtype=float)
+            rot = np.array([0.0, 0.0, 0.0, 1.0], dtype=float)  # xyzw
+            if origin_node is not None:
+                pos = np.fromstring(origin_node.attrib.get("xyz", "0 0 0"), dtype=float, sep=" ")
+                if pos.size != 3:
+                    raise ValueError(f"Invalid URDF origin xyz in joint: {joint_name}")
+                rpy = np.fromstring(origin_node.attrib.get("rpy", "0 0 0"), dtype=float, sep=" ")
+                if rpy.size != 3:
+                    raise ValueError(f"Invalid URDF origin rpy in joint: {joint_name}")
+                rot = R.from_euler("xyz", rpy, degrees=False).as_quat()
+
+            axis_node = joint.find("axis")
+            axis = np.array([1.0, 0.0, 0.0], dtype=float)
+            if axis_node is not None:
+                axis = np.fromstring(axis_node.attrib.get("xyz", "1 0 0"), dtype=float, sep=" ")
+                if axis.size != 3:
+                    raise ValueError(f"Invalid URDF axis in joint: {joint_name}")
+            axis_norm = np.linalg.norm(axis)
+            if axis_norm > 1e-8:
+                axis = axis / axis_norm
+            else:
+                axis = np.array([1.0, 0.0, 0.0], dtype=float)
+
+            lower_limit = None
+            upper_limit = None
+            limit_node = joint.find("limit")
+            if limit_node is not None:
+                lower = limit_node.attrib.get("lower")
+                upper = limit_node.attrib.get("upper")
+                if lower is not None and upper is not None:
+                    lower_limit = float(lower)
+                    upper_limit = float(upper)
+
+            joint_by_child[child_link] = {
+                "type": joint_type,
+                "parent": parent_link,
+                "pos": pos,
+                "rot": rot,
+                "axis": axis,
+                "lower": lower_limit,
+                "upper": upper_limit,
+            }
+            child_links.add(child_link)
+            children_by_parent.setdefault(parent_link, []).append(child_link)
+
+        root_links = [link_name for link_name in links if link_name not in child_links]
+        if len(root_links) != 1:
+            raise ValueError(f"Expected one URDF root link, found {len(root_links)}: {root_links}")
+        root_link = root_links[0]
+        # Ignore a synthetic world link if the actual robot root is attached via a floating joint.
+        if root_link == "world":
+            world_children = children_by_parent.get(root_link, [])
+            if len(world_children) == 1:
+                maybe_robot_root = world_children[0]
+                if joint_by_child[maybe_robot_root]["type"] == "floating":
+                    root_link = maybe_robot_root
+
+        def _add_urdf_link(link_name, parent_index, body_index):
+            if parent_index == -1:
+                pos = np.zeros(3, dtype=float)
+                rot = np.array([0.0, 0.0, 0.0, 1.0], dtype=float)
+                curr_joint = Joint(name=link_name, dof_dim=0, axis=None)
+            else:
+                joint_data = joint_by_child[link_name]
+                pos = joint_data["pos"]
+                rot = joint_data["rot"]
+                joint_type = joint_data["type"]
+
+                if joint_type in ("fixed", "floating", "planar"):
+                    curr_joint = Joint(name=link_name, dof_dim=0, axis=None)
+                elif joint_type in ("revolute", "continuous"):
+                    axis = torch.from_numpy(joint_data["axis"]).to(self._device, dtype=torch.float)
+                    curr_joint = Joint(name=link_name, dof_dim=1, axis=axis)
+                    lower_limit = joint_data["lower"]
+                    upper_limit = joint_data["upper"]
+                    if joint_type == "continuous" or lower_limit is None or upper_limit is None:
+                        lower_limit = -np.pi
+                        upper_limit = np.pi
+                    self._dof_lower_limits.append(lower_limit)
+                    self._dof_upper_limits.append(upper_limit)
+                else:
+                    raise NotImplementedError(f"Unsupported URDF joint type: {joint_type}")
+
+            self._body_names.append(link_name)
+            self._parent_indices.append(parent_index)
+            self._local_rotation.append(rot)
+            self._local_translation.append(pos)
+            self._joints.append(curr_joint)
+            self._dof_size.append(curr_joint.dof_dim)
+
+            curr_index = body_index
+            body_index += 1
+            for child_link in children_by_parent.get(link_name, []):
+                body_index = _add_urdf_link(child_link, curr_index, body_index)
+
+            return body_index
+
+        _add_urdf_link(root_link, -1, 0)
         
     def _set_dof_indices(self):
         curr_dof_idx = 0
