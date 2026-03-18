@@ -1,13 +1,11 @@
 import pathlib
 
 HERE = pathlib.Path(__file__).parent
-PROJECT_ROOT = HERE / ".."
 IK_CONFIG_ROOT = HERE / "ik_configs"
-ASSET_ROOT = PROJECT_ROOT / "assets"
-G1_DESCRIPTION_ROOT = PROJECT_ROOT / "g1_description"
+ASSET_ROOT = HERE / ".." / "assets"
 
 ROBOT_XML_DICT = {
-    "unitree_g1": G1_DESCRIPTION_ROOT / "g1_29dof_lock_waist_with_fixed_hand_rev_1_0_feet_inertia.urdf",
+    "unitree_g1": ASSET_ROOT / "unitree_g1" / "g1_mocap_29dof.xml",
     "unitree_g1_with_hands": ASSET_ROOT / "unitree_g1" / "g1_mocap_29dof_with_hands.xml",
     "unitree_h1": ASSET_ROOT / "unitree_h1" / "h1.xml",
     "unitree_h1_2": ASSET_ROOT / "unitree_h1_2" / "h1_2_handless.xml",
@@ -30,7 +28,7 @@ ROBOT_XML_DICT = {
 IK_CONFIG_DICT = {
     # offline data
     "smplx":{
-        "unitree_g1": IK_CONFIG_ROOT / "smplx_to_g1_urdf.json",
+        "unitree_g1": IK_CONFIG_ROOT / "smplx_to_g1.json",
         "unitree_g1_with_hands": IK_CONFIG_ROOT / "smplx_to_g1.json",
         "unitree_h1": IK_CONFIG_ROOT / "smplx_to_h1.json",
         "unitree_h1_2": IK_CONFIG_ROOT / "smplx_to_h1_2.json",
