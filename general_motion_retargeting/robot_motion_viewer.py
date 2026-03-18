@@ -4,7 +4,8 @@ import mujoco as mj
 import mujoco.viewer as mjv
 import imageio
 from scipy.spatial.transform import Rotation as R
-from general_motion_retargeting import ROBOT_XML_DICT, ROBOT_BASE_DICT, VIEWER_CAM_DISTANCE_DICT
+from .model_utils import resolve_robot_model_path
+from .params import ROBOT_BASE_DICT, VIEWER_CAM_DISTANCE_DICT
 from loop_rate_limiters import RateLimiter
 import numpy as np
 from rich import print
@@ -54,10 +55,14 @@ class RobotMotionViewer:
                 video_width=640,
                 video_height=480,
                 keyboard_callback=None,
+                robot_model_path=None,
                 ):
         
         self.robot_type = robot_type
-        self.xml_path = ROBOT_XML_DICT[robot_type]
+        self.xml_path = resolve_robot_model_path(
+            tgt_robot=robot_type,
+            robot_model_path=robot_model_path,
+        )
         self.model = mj.MjModel.from_xml_path(str(self.xml_path))
         self.data = mj.MjData(self.model)
         self.robot_base = ROBOT_BASE_DICT[robot_type]

@@ -4,7 +4,8 @@ import mujoco as mj
 import numpy as np
 import json
 from scipy.spatial.transform import Rotation as R
-from .params import ROBOT_XML_DICT, IK_CONFIG_DICT
+from .model_utils import resolve_robot_model_path
+from .params import IK_CONFIG_DICT
 from rich import print
 
 class GeneralMotionRetargeting:
@@ -19,10 +20,17 @@ class GeneralMotionRetargeting:
         damping: float=5e-1, # change from 1e-1 to 1e-2.
         verbose: bool=True,
         use_velocity_limit: bool=False,
+        robot_model_path: str | None = None,
     ) -> None:
 
         # load the robot model
-        self.xml_file = str(ROBOT_XML_DICT[tgt_robot])
+        self.xml_file = str(
+            resolve_robot_model_path(
+                tgt_robot=tgt_robot,
+                src_human=src_human,
+                robot_model_path=robot_model_path,
+            )
+        )
         if verbose:
             print("Use robot model: ", self.xml_file)
         self.model = mj.MjModel.from_xml_path(self.xml_file)

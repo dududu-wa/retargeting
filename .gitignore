@@ -61,6 +61,7 @@ assets/body_models/
 # Model files
 smplx/
 body_models/
+*.generated.xml
 *.pkl
 *.pth
 *.pt

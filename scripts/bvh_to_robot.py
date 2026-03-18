@@ -39,6 +39,13 @@ if __name__ == "__main__":
         choices=["unitree_g1", "unitree_g1_with_hands", "booster_t1", "stanford_toddy", "fourier_n1", "engineai_pm01", "pal_talos"],
         default="unitree_g1",
     )
+
+    parser.add_argument(
+        "--robot_model_path",
+        type=str,
+        default=None,
+        help="Optional custom robot model path. For unitree_g1 BVH, defaults to the custom collision URDF when omitted.",
+    )
     
     
     parser.add_argument(
@@ -89,11 +96,13 @@ if __name__ == "__main__":
         src_human=f"bvh_{args.format}",
         tgt_robot=args.robot,
         actual_human_height=actual_human_height,
+        robot_model_path=args.robot_model_path,
     )
 
     motion_fps = args.motion_fps
     
     robot_motion_viewer = RobotMotionViewer(robot_type=args.robot,
+                                            robot_model_path=retargeter.xml_file,
                                             motion_fps=motion_fps,
                                             transparent_robot=0,
                                             record_video=args.record_video,

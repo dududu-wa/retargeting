@@ -32,6 +32,7 @@ This repo is licensed under the [MIT License](LICENSE).
 
 
 # News & Updates
+- **2026-03-18:** For BVH retargeting to `unitree_g1`, GMR now defaults to `assets/unitree_g1/g1_custom_collision_29dof.urdf`, generates a cached MJCF file for downstream tools, and adds `--robot_model_path` to the BVH scripts for explicit model override.
 - **2026-01-21:** GMR now supports [Xsens](https://www.xsens.com/) BVH offline data.
 - **2026-01-12:** GMR now supports [Fourier GR3](https://www.fftai.com/), the 17th humanoid robot in the repo.
 - **2025-12-02:** GMR now supports [TWIST2](https://yanjieze.com/TWIST2), which utilizes [XRoboToolkit SDK](https://github.com/XR-Robotics/XRoboToolkit-PC-Service).
@@ -325,16 +326,20 @@ python scripts/gvhmr_to_robot.py --gvhmr_pred_file <path_to_hmr4d_results.pt> --
 
 ## Retargeting from BVH (LAFAN1, Nokov) to Robot
 
+> [!NOTE]
+> When `--robot unitree_g1` is used in `scripts/bvh_to_robot.py` or `scripts/bvh_to_robot_dataset.py` and `--robot_model_path` is not provided, GMR will automatically use `assets/unitree_g1/g1_custom_collision_29dof.urdf`. Since some downstream modules in this repo still expect MuJoCo XML, GMR will generate a cached file named `assets/unitree_g1/g1_custom_collision_29dof.generated.xml` locally and load that generated file internally.
+
 Retarget a single motion:
 
 ```bash
 # single motion
-python scripts/bvh_to_robot.py --bvh_file <path_to_bvh_data> --robot <path_to_robot_data> --save_path <path_to_save_robot_data.pkl> --rate_limit --format <format>
+python scripts/bvh_to_robot.py --bvh_file <path_to_bvh_data> --robot <robot_name> --save_path <path_to_save_robot_data.pkl> --rate_limit --format <format>
 ```
 
 By default you should see the visualization of the retargeted robot motion in a mujoco window. 
 - `--rate_limit` is used to limit the rate of the retargeted robot motion to keep the same as the human motion. If you want it as fast as possible, remove `--rate_limit`.
 - `--format` is used to specify the format of the BVH data. Supported formats are `lafan1` and `nokov`.
+- `--robot_model_path` can be used to explicitly override the robot model file for BVH retargeting. This is optional for `unitree_g1`, because the custom collision URDF is already used by default.
 
 
 Retarget a folder of motions:
@@ -348,6 +353,9 @@ By default there is no visualization for batch retargeting.
 
 
 ## Retargeting from BVH (Xsens) to Robot
+
+> [!NOTE]
+> When `--robot unitree_g1` is used in `scripts/xsens_bvh_to_robot.py` and `--robot_model_path` is not provided, GMR will automatically use `assets/unitree_g1/g1_custom_collision_29dof.urdf`, then generate and load the cached MuJoCo XML file `assets/unitree_g1/g1_custom_collision_29dof.generated.xml` internally.
 
 #### Visualize bvh data using mujoco:
 
@@ -379,6 +387,8 @@ python general_motion_retargeting/utils/xsens_vendor/mujoco_xsens_bvh_view.py \
 
 - `--scale` is used to set the scaling value of the displacement, which depends on the relationship between the unit used for the displacement in the dataset and the meter.
 
+- `--robot_model_path` can be used to explicitly override the robot model file for BVH retargeting. This is optional for `unitree_g1`, because the custom collision URDF is already used by default.
+
 - ##### Before using it, you must install PyQt6. `pip install PyQt6`
 - ##### Upon executing this command, a UI interface will be launched, enabling you to adjust the angle values for each channel in the x, y, and z directions of every joint. After completing the adjustments, click the `"Apply and Preview"` button, which will generate an `offset.json` file locally and perform a MuJoCo visualization playback of the BVH file. When running `xsens_bvh_to_robot.py`, it will read the data from this JSON file. Therefore, you need to execute `mujoco_xsens_bvh_view.py` prior to using `xsens_bvh_to_robot.py` for motion retargeting, to ensure that the `offset.json` file exists locally.
 
@@ -387,7 +397,7 @@ python general_motion_retargeting/utils/xsens_vendor/mujoco_xsens_bvh_view.py \
 # single motion
 python scripts/xsens_bvh_to_robot.py \
   --bvh_file <path_to_bvh_data> \
-  --robot <path_to_robot_data> \
+  --robot <robot_name> \
   --save_path <path_to_save_robot_data.pkl> \
   --rate_limit \
   --start <number of the first frame> \
@@ -418,6 +428,8 @@ python scripts/xsens_bvh_to_robot.py  \
 
 ##### ！！！！！！！！！！！！！！！！！！ ATTENTION ！！！！！！！！！！！！！！！！！！！！
 - `--bvh_format` is used to set the format of the bvh being parsed. In the Xsens MVN software, BVH files in three formats can be exported. There will be some differences among BVH files in different formats. Here I recommend using the 3D Studio Max format.(In fact, I have not yet completed the parsing of data in other formats.)
+
+- `--robot_model_path` can be used to explicitly override the robot model file for BVH retargeting. This is optional for `unitree_g1`, because the custom collision URDF is already used by default.
 
 - The exported pkl file will represent quaternions in the `wxyz` format. ^ _ ^
   
