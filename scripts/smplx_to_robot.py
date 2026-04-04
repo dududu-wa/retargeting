@@ -88,7 +88,6 @@ if __name__ == "__main__":
     )
     
     robot_motion_viewer = RobotMotionViewer(robot_type=args.robot,
-                                            robot_model_path=retarget.xml_file,
                                             motion_fps=aligned_fps,
                                             transparent_robot=0,
                                             record_video=args.record_video,

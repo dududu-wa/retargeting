@@ -99,7 +99,6 @@ if __name__ == "__main__":
     motion_fps = 120
     
     robot_motion_viewer = RobotMotionViewer(robot_type=args.robot,
-                                            robot_model_path=retargeter.xml_file,
                                             motion_fps=motion_fps,
                                             transparent_robot=1,
                                             record_video=args.record_video,

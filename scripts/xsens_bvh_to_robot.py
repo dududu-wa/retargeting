@@ -40,13 +40,6 @@ if __name__ == "__main__":
     )
 
     parser.add_argument(
-        "--robot_model_path",
-        type=str,
-        default=None,
-        help="Optional custom robot model path. For unitree_g1 BVH, defaults to the custom collision URDF when omitted.",
-    )
-
-    parser.add_argument(
         "--video_path",
         type=str,
         default="videos/example.mp4",
@@ -126,14 +119,12 @@ if __name__ == "__main__":
         src_human="bvh_xsens",
         tgt_robot=args.robot,
         actual_human_height=actual_human_height,
-        robot_model_path=args.robot_model_path,
     )
 
     motion_fps = int(1/frame_time)
 
     robot_motion_viewer = RobotMotionViewer(
         robot_type=args.robot,
-        robot_model_path=retargeter.xml_file,
         motion_fps=motion_fps,
         transparent_robot=0,
         record_video=args.record_video,

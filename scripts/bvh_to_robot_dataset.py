@@ -34,13 +34,6 @@ if __name__ == "__main__":
         "--robot",
         default="unitree_g1",
     )
-
-    parser.add_argument(
-        "--robot_model_path",
-        type=str,
-        default=None,
-        help="Optional custom robot model path. For unitree_g1 BVH, defaults to the custom collision URDF when omitted.",
-    )
     
     parser.add_argument(
         "--override",
@@ -89,10 +82,9 @@ if __name__ == "__main__":
             
             # Initialize the retargeting system
             retarget = GMR(
-                src_human="bvh_lafan1",
+                src_human="bvh",
                 tgt_robot=args.robot,
                 actual_human_height=actual_human_height,
-                robot_model_path=args.robot_model_path,
             )
             model = mj.MjModel.from_xml_path(retarget.xml_file)
             data = mj.MjData(model)

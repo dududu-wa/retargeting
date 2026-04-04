@@ -32,10 +32,7 @@ def main(args):
             tgt_robot=args.robot,
             actual_human_height=1.6,
         )
-    viewer = RobotMotionViewer(
-        robot_type=args.robot,
-        robot_model_path=retarget.xml_file,
-    )
+    viewer = RobotMotionViewer(robot_type="unitree_g1")
 
     while True:
         frame = client.get_frame()
