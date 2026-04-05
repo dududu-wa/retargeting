@@ -335,6 +335,18 @@ python scripts/bvh_to_robot.py --bvh_file <path_to_bvh_data> --robot <path_to_ro
 By default you should see the visualization of the retargeted robot motion in a mujoco window. 
 - `--rate_limit` is used to limit the rate of the retargeted robot motion to keep the same as the human motion. If you want it as fast as possible, remove `--rate_limit`.
 - `--format` is used to specify the format of the BVH data. Supported formats are `lafan1` and `nokov`.
+- For first-time inspection and tuning, use `scripts/bvh_to_robot.py`. It visualizes the retargeted motion during conversion and can save the result at the end.
+- To preview the motion and save an `.npz` for external downstream at the same time, set `--save_path` to an `.npz` path, or pass `--save_format npz`.
+
+Example:
+```bash
+python scripts/bvh_to_robot.py \
+  --bvh_file <path_to_bvh_data> \
+  --robot <robot_name> \
+  --format lafan1 \
+  --rate_limit \
+  --save_path <path_to_save_robot_data.npz>
+```
 
 
 Retarget a folder of motions:
@@ -344,6 +356,8 @@ python scripts/bvh_to_robot_dataset.py --src_folder <path_to_dir_of_bvh_data> --
 ```
 
 By default there is no visualization for batch retargeting.
+- This batch script is intended for offline export. Use the single-motion script above for visual checking first, then run the dataset script for large-scale conversion.
+- The dataset script can export `pkl`, `npz`, or both via `--output_format`, and defaults to `npz`.
 
 
 
@@ -477,6 +491,7 @@ python scripts/vis_robot_motion.py --robot <robot_name> --robot_motion_path <pat
 ```
 
 If you want to record video, add `--record_video` and `--video_path <your_video_path,mp4>`.
+- The current saved-motion visualization scripts load the legacy `.pkl` format. If you want to visually inspect a motion that will be saved as `.npz`, use `scripts/bvh_to_robot.py` during the initial conversion.
 
 Visualize a folder of motions:
 

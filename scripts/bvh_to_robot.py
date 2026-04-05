@@ -4,10 +4,12 @@ import time
 from general_motion_retargeting import GeneralMotionRetargeting as GMR
 from general_motion_retargeting import RobotMotionViewer
 from general_motion_retargeting.utils.lafan1 import load_bvh_file
+from general_motion_retargeting.utils.motion_export import build_npz_motion_data
 from rich import print
 from tqdm import tqdm
 import os
 import numpy as np
+import pickle
 
 if __name__ == "__main__":
     
@@ -36,7 +38,7 @@ if __name__ == "__main__":
     
     parser.add_argument(
         "--robot",
-        choices=["unitree_g1", "unitree_g1_with_hands", "booster_t1", "stanford_toddy", "fourier_n1", "engineai_pm01", "pal_talos"],
+        choices=["unitree_g1", "unitree_g1_with_hands", "booster_t1", "stanford_toddy", "fourier_n1", "engineai_pm01", "pal_talos", "r2v2_12dof"],
         default="unitree_g1",
     )
     
@@ -64,6 +66,13 @@ if __name__ == "__main__":
         default=None,
         help="Path to save the robot motion.",
     )
+
+    parser.add_argument(
+        "--save_format",
+        choices=["auto", "pkl", "npz"],
+        default="auto",
+        help="Output format when --save_path is set.",
+    )
     
     parser.add_argument(
         "--motion_fps",
@@ -72,6 +81,11 @@ if __name__ == "__main__":
     )
     
     args = parser.parse_args()
+
+    save_format = args.save_format
+    if args.save_path is not None and save_format == "auto":
+        suffix = pathlib.Path(args.save_path).suffix.lower()
+        save_format = "npz" if suffix == ".npz" else "pkl"
     
     if args.save_path is not None:
         save_dir = os.path.dirname(args.save_path)
@@ -149,36 +163,39 @@ if __name__ == "__main__":
             # human_pos_offset=np.array([0.0, 0.0, 0.0])
         )
 
+        if args.save_path is not None:
+            qpos_list.append(qpos.copy())
+
         if args.loop:
             i = (i + 1) % len(lafan1_data_frames)
         else:
             i += 1
             if i >= len(lafan1_data_frames):
                 break
-   
-        
-        if args.save_path is not None:
-            qpos_list.append(qpos)
     
     if args.save_path is not None:
-        import pickle
-        root_pos = np.array([qpos[:3] for qpos in qpos_list])
-        # save from wxyz to xyzw
-        root_rot = np.array([qpos[3:7][[1,2,3,0]] for qpos in qpos_list])
-        dof_pos = np.array([qpos[7:] for qpos in qpos_list])
-        local_body_pos = None
-        body_names = None
-        
-        motion_data = {
-            "fps": motion_fps,
-            "root_pos": root_pos,
-            "root_rot": root_rot,
-            "dof_pos": dof_pos,
-            "local_body_pos": local_body_pos,
-            "link_body_list": body_names,
-        }
-        with open(args.save_path, "wb") as f:
-            pickle.dump(motion_data, f)
+        qpos_array = np.asarray(qpos_list, dtype=np.float32)
+        if save_format == "npz":
+            npz_data = build_npz_motion_data(retargeter.xml_file, qpos_array, motion_fps, fk_device="cpu")
+            np.savez(args.save_path, **npz_data)
+        else:
+            root_pos = qpos_array[:, :3]
+            # save from wxyz to xyzw
+            root_rot = qpos_array[:, 3:7][:, [1, 2, 3, 0]]
+            dof_pos = qpos_array[:, 7:]
+            local_body_pos = None
+            body_names = None
+
+            motion_data = {
+                "fps": motion_fps,
+                "root_pos": root_pos,
+                "root_rot": root_rot,
+                "dof_pos": dof_pos,
+                "local_body_pos": local_body_pos,
+                "link_body_list": body_names,
+            }
+            with open(args.save_path, "wb") as f:
+                pickle.dump(motion_data, f)
         print(f"Saved to {args.save_path}")
 
     # Close progress bar
