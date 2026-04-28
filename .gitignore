@@ -113,3 +113,14 @@ batch_twist1_to_csv.py
 yaml_to_flat_csv.py
 
 compute_rotation.py
+
+# Dataset directories (large data files)
+lafan1_bvh/
+lafan1_npz_r2v2/
+lafan1_npz_r2v2_compat/
+lafan1_pkl_r2v2/
+lafan1_r2v2_pkl/
+ubisoft-laforge-animation-dataset/
+output/
+dataset/
+retargeting_data/
