@@ -56,8 +56,9 @@ This JSON config maps LAFAN1 BVH bones to R2V2 MuJoCo bodies. Each task entry is
 - `use_ik_match_table1`: Enables the first IK task set.
 - `use_ik_match_table2`: Enables the second IK task set.
 - `posture_task`: Optional low-priority `mink.PostureTask` regularizer. It
-  biases selected joints toward the MuJoCo neutral pose when task-space targets
-  conflict, instead of letting hand/forearm tasks borrow large waist motion.
+  biases selected arm joints toward the MuJoCo neutral pose when task-space
+  targets conflict. Waist posture cost is kept at `0` so the torso can follow
+  BVH body orientation rather than being pulled to neutral.
 - `human_scale_table`: Per-bone scale factors before setting IK targets.
 - `ik_match_table1`: First-pass tasks, mainly orientation alignment and coarse
   body placement.
@@ -65,23 +66,23 @@ This JSON config maps LAFAN1 BVH bones to R2V2 MuJoCo bodies. Each task entry is
 
 ### R2V2 Arm And Waist Tuning
 
-- `waist_pitch_link <- Spine2`: orientation cost was reduced to `0` in both IK
-  passes because `waist_pitch_joint` has a narrow MuJoCo range
-  `[-0.523599, 0.523599]`. The previous orientation task pushed jump motions to
-  the upper limit for most frames.
+- `waist_pitch_link <- Spine2`: orientation cost is kept at `10` in both IK
+  passes because the body angle must follow the BVH torso. Hand tasks are
+  instead weakened/disabled so they cannot pull the torso away from this target.
 - `left_arm_pitch_link <- LeftForeArm` and
   `right_arm_pitch_link <- RightForeArm`: orientation cost was reduced to `0`
-  and position cost to `1`. R2V2 no-hand kinematics cannot exactly reproduce
+  and position cost to `0.5`. R2V2 no-hand kinematics cannot exactly reproduce
   LAFAN1 forearm orientation, and the previous task pushed
   `right_arm_pitch_joint` into its lower limit.
 - `left_hand_roll_link <- LeftHand` and
   `right_hand_roll_link <- RightHand`: orientation cost was reduced to `0` and
-  position cost to `0.5`. These are fixed downstream bodies in the no-hand
-  model, so high hand pose weights over-constrained the shoulder/elbow chain.
-- `posture_task.costs`: waist joints use cost `0.5`, while shoulder and arm
-  joints use cost `0.05`. This keeps the IK solution near neutral only when the
-  motion targets leave redundant freedom; it is intentionally weaker than the
-  main `FrameTask` tracking costs.
+  position cost to `0`. These are fixed downstream bodies in the no-hand model,
+  so hand end-body tracking would over-constrain the shoulder/elbow chain and
+  borrow torso motion.
+- `posture_task.costs`: waist joints use cost `0`, while shoulder and arm joints
+  use cost `0.05`. This keeps the arm solution near neutral only when the motion
+  targets leave redundant freedom; it is intentionally weaker than the main
+  `FrameTask` tracking costs.
 
 ## Relevant Runtime Files
 
