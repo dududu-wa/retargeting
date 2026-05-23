@@ -56,9 +56,9 @@ This JSON config maps LAFAN1 BVH bones to R2V2 MuJoCo bodies. Each task entry is
 - `use_ik_match_table1`: Enables the first IK task set.
 - `use_ik_match_table2`: Enables the second IK task set.
 - `posture_task`: Optional low-priority `mink.PostureTask` regularizer. It
-  biases selected arm joints toward the MuJoCo neutral pose when task-space
-  targets conflict. Waist posture cost is kept at `0` so the torso can follow
-  BVH body orientation rather than being pulled to neutral.
+  biases selected arm joints toward a MuJoCo qpos-space reference when
+  task-space targets conflict. Waist posture cost is kept at `0` so the torso
+  can follow BVH body orientation rather than being pulled to neutral.
 - `human_scale_table`: Per-bone scale factors before setting IK targets.
 - `ik_match_table1`: First-pass tasks, mainly orientation alignment and coarse
   body placement.
@@ -83,6 +83,14 @@ This JSON config maps LAFAN1 BVH bones to R2V2 MuJoCo bodies. Each task entry is
   use cost `0.05`. This keeps the arm solution near neutral only when the motion
   targets leave redundant freedom; it is intentionally weaker than the main
   `FrameTask` tracking costs.
+- `posture_task.target_offsets`: adds a small `+0.2` rad qpos-space target bias
+  to both R2V2 `arm_pitch_joint`s. Local diagnostics showed this lowers the walk
+  hands/forearms by about 1.4-1.5 cm while leaving the body-angle task
+  effectively unchanged, because waist posture cost remains `0`.
+- `direction_tasks`: second-pass elbow-to-hand direction constraints. These
+  align each robot forearm direction with the matching BVH forearm-to-hand
+  direction without enforcing full wrist orientation, which would over-constrain
+  the R2V2 no-hand model.
 
 ## Relevant Runtime Files
 
@@ -95,13 +103,20 @@ This JSON config maps LAFAN1 BVH bones to R2V2 MuJoCo bodies. Each task entry is
 
 ### `general_motion_retargeting/motion_retarget.py`
 
+- `BodyDirectionTask`: Custom `mink.Task` that minimizes the difference between
+  a robot body-to-body unit vector and a BVH-derived target unit vector. Its
+  Jacobian uses MuJoCo translational body Jacobians and the normalized-vector
+  derivative `(I - uu^T) / ||v||`, so it controls forearm direction rather than
+  absolute hand pose.
 - `GeneralMotionRetargeting.__init__`: Loads the robot XML, IK config, scale
   table, MuJoCo joint limits, and task lists.
 - `setup_retarget_configuration`: Converts each IK table entry into a
-  `mink.FrameTask` with position and orientation costs.
+  `mink.FrameTask` with position and orientation costs, then appends optional
+  second-pass `BodyDirectionTask`s from `direction_tasks`.
 - `create_posture_task`: Builds the optional `mink.PostureTask` from the IK
-  config, maps joint names to MuJoCo DoF indices, targets `model.qpos0`, and
-  raises an error if a configured joint name does not exist.
+  config, maps joint names to MuJoCo DoF indices, targets `model.qpos0` plus
+  optional `target_offsets`, and raises an error if a configured joint name does
+  not exist.
 - `update_targets`: Scales human data, applies position/rotation offsets, and
   writes target SE(3) poses into the active IK tasks.
 - `retarget`: Solves the two-stage IK problem with `mink.solve_ik`, integrates

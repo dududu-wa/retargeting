@@ -8,10 +8,14 @@
     "use_ik_match_table2": true,
     "posture_task": {
         "enabled": true,
-        "comment": "Low-priority neutral-posture regularization. Based on mink PostureTask docs: posture tasks bias redundant/conflicting IK solutions toward a target posture while FrameTasks keep tracking motion.",
+        "comment": "Low-priority neutral-posture regularization. Based on mink PostureTask docs: posture tasks bias redundant/conflicting IK solutions toward a target posture while FrameTasks keep tracking motion. Arm-pitch target_offsets are a small qpos-space bias to lower the forearms without changing torso FrameTask weights.",
         "gain": 1.0,
         "lm_damping": 0.0,
         "target": "qpos0",
+        "target_offsets": {
+            "left_arm_pitch_joint": 0.2,
+            "right_arm_pitch_joint": 0.2
+        },
         "costs": {
             "waist_yaw_joint": 0.0,
             "waist_pitch_joint": 0.0,
@@ -29,6 +33,28 @@
             "right_arm_yaw_joint": 0.05
         }
     },
+    "direction_tasks": [
+        {
+            "comment": "Second-pass forearm direction task. It aligns the robot elbow-to-hand direction with the BVH forearm-to-hand direction without enforcing full hand orientation, which would over-constrain the no-hand R2V2 model.",
+            "human_start_body": "LeftForeArm",
+            "human_end_body": "LeftHand",
+            "robot_start_body": "left_arm_pitch_link",
+            "robot_end_body": "left_hand_roll_link",
+            "cost": 2.0,
+            "gain": 0.7,
+            "lm_damping": 0.0
+        },
+        {
+            "comment": "Second-pass forearm direction task. It aligns the robot elbow-to-hand direction with the BVH forearm-to-hand direction without enforcing full hand orientation, which would over-constrain the no-hand R2V2 model.",
+            "human_start_body": "RightForeArm",
+            "human_end_body": "RightHand",
+            "robot_start_body": "right_arm_pitch_link",
+            "robot_end_body": "right_hand_roll_link",
+            "cost": 2.0,
+            "gain": 0.7,
+            "lm_damping": 0.0
+        }
+    ],
     "human_scale_table": {
         "Hips": 0.85,
         "Spine2": 0.85,

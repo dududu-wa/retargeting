@@ -7,6 +7,88 @@ from scipy.spatial.transform import Rotation as R
 from .params import ROBOT_XML_DICT, IK_CONFIG_DICT
 from rich import print
 
+class BodyDirectionTask(mink.Task):
+    """Align the direction from one robot body to another with a target vector."""
+
+    def __init__(
+        self,
+        model: mj.MjModel,
+        start_body_name: str,
+        end_body_name: str,
+        cost,
+        gain: float = 1.0,
+        lm_damping: float = 0.0,
+    ):
+        self.model = model
+        self.start_body_name = start_body_name
+        self.end_body_name = end_body_name
+        self.start_body_id = mj.mj_name2id(
+            model, mj.mjtObj.mjOBJ_BODY, start_body_name
+        )
+        self.end_body_id = mj.mj_name2id(
+            model, mj.mjtObj.mjOBJ_BODY, end_body_name
+        )
+        if self.start_body_id < 0:
+            raise ValueError(f"Unknown direction-task start body: {start_body_name}")
+        if self.end_body_id < 0:
+            raise ValueError(f"Unknown direction-task end body: {end_body_name}")
+
+        cost = np.broadcast_to(np.atleast_1d(cost).astype(float), (3,)).copy()
+        super().__init__(cost=cost, gain=gain, lm_damping=lm_damping)
+        self.target_direction = None
+
+    def set_target_direction(self, direction):
+        direction = np.asarray(direction, dtype=float)
+        norm = np.linalg.norm(direction)
+        if norm < 1e-8:
+            raise ValueError(
+                f"Direction target for {self.start_body_name}->{self.end_body_name} is near zero"
+            )
+        self.target_direction = direction / norm
+
+    def _current_direction(self, configuration):
+        start = configuration.data.xpos[self.start_body_id]
+        end = configuration.data.xpos[self.end_body_id]
+        delta = end - start
+        norm = max(np.linalg.norm(delta), 1e-8)
+        return delta / norm, norm
+
+    def compute_error(self, configuration):
+        if self.target_direction is None:
+            raise ValueError(
+                f"Direction target is not set for {self.start_body_name}->{self.end_body_name}"
+            )
+        current, _ = self._current_direction(configuration)
+        return current - self.target_direction
+
+    def compute_jacobian(self, configuration):
+        current, length = self._current_direction(configuration)
+        start_jac = np.zeros((3, configuration.model.nv))
+        end_jac = np.zeros((3, configuration.model.nv))
+        unused_rot_jac = np.zeros((3, configuration.model.nv))
+        mj.mj_jacBody(
+            configuration.model,
+            configuration.data,
+            start_jac,
+            unused_rot_jac,
+            self.start_body_id,
+        )
+        mj.mj_jacBody(
+            configuration.model,
+            configuration.data,
+            end_jac,
+            unused_rot_jac,
+            self.end_body_id,
+        )
+
+        # For u = v / ||v||, du/dq = (I - uu^T) / ||v|| * dv/dq.
+        # This is the standard differential-kinematics form used in
+        # resolved-rate IK (e.g. Siciliano et al., Robotics, 2009) and avoids
+        # constraining the no-hand R2V2 wrist's full orientation.
+        projector = np.eye(3) - np.outer(current, current)
+        return (projector / length) @ (end_jac - start_jac)
+
+
 class GeneralMotionRetargeting:
     """General Motion Retargeting (GMR).
     """
@@ -79,6 +161,7 @@ class GeneralMotionRetargeting:
         self.use_ik_match_table2 = ik_config["use_ik_match_table2"]
         self.human_scale_table = ik_config["human_scale_table"]
         self.posture_task_config = ik_config.get("posture_task", {"enabled": False})
+        self.direction_task_config = ik_config.get("direction_tasks", [])
         self.ground = ik_config["ground_height"] * np.array([0, 0, 1])
 
         self.max_iter = 10
@@ -95,6 +178,7 @@ class GeneralMotionRetargeting:
 
         self.task_errors1 = {}
         self.task_errors2 = {}
+        self.human_bodies_to_direction_tasks = []
 
         self.ik_limits = [mink.ConfigurationLimit(self.model)]
         if use_velocity_limit:
@@ -152,6 +236,23 @@ class GeneralMotionRetargeting:
             self.tasks1.append(posture_task)
             self.tasks2.append(posture_task)
 
+        for entry in self.direction_task_config:
+            task = BodyDirectionTask(
+                model=self.model,
+                start_body_name=entry["robot_start_body"],
+                end_body_name=entry["robot_end_body"],
+                cost=entry.get("cost", 1.0),
+                gain=float(entry.get("gain", 1.0)),
+                lm_damping=float(entry.get("lm_damping", 0.0)),
+            )
+            # Add the direction task only in the second pass so torso and
+            # shoulder placement are established before forearm direction is
+            # refined. This follows the project two-stage IK structure.
+            self.tasks2.append(task)
+            self.human_bodies_to_direction_tasks.append(
+                (entry["human_start_body"], entry["human_end_body"], task)
+            )
+
     def create_posture_task(self):
         if not self.posture_task_config.get("enabled", False):
             return None
@@ -179,7 +280,21 @@ class GeneralMotionRetargeting:
         target = self.posture_task_config.get("target", "qpos0")
         if target != "qpos0":
             raise ValueError(f"Unsupported posture_task target: {target}")
-        task.set_target(self.model.qpos0)
+
+        target_qpos = self.model.qpos0.copy()
+        # PostureTask targets live in MuJoCo qpos space. Small configured
+        # offsets let us bias redundant arm joints without changing torso
+        # FrameTask weights, following mink's low-priority posture regularizer.
+        for joint_name, qpos_offset in self.posture_task_config.get("target_offsets", {}).items():
+            joint_id = mj.mj_name2id(self.model, mj.mjtObj.mjOBJ_JOINT, joint_name)
+            if joint_id < 0:
+                raise ValueError(f"posture_task target_offsets references unknown joint: {joint_name}")
+            if int(self.model.jnt_type[joint_id]) == mj.mjtJoint.mjJNT_FREE:
+                raise ValueError(f"posture_task target_offsets cannot target free joint: {joint_name}")
+            qpos_id = int(self.model.jnt_qposadr[joint_id])
+            target_qpos[qpos_id] += float(qpos_offset)
+
+        task.set_target(target_qpos)
         return task
 
   
@@ -204,6 +319,11 @@ class GeneralMotionRetargeting:
                 task = self.human_body_to_task2[body_name]
                 pos, rot = human_data[body_name]
                 task.set_target(mink.SE3.from_rotation_and_translation(mink.SO3(rot), pos))
+
+        for human_start, human_end, task in self.human_bodies_to_direction_tasks:
+            start_pos = human_data[human_start][0]
+            end_pos = human_data[human_end][0]
+            task.set_target_direction(end_pos - start_pos)
             
             
     def retarget(self, human_data, offset_to_ground=False):
