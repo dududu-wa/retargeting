@@ -20,7 +20,7 @@ coverage.xml
 .mypy_cache
 .pytest_cache
 .hypothesis
-
+intput
 # IDEs
 .vscode/
 .idea/

@@ -2,6 +2,20 @@ import argparse
 import os
 from pathlib import Path
 
+
+def _configure_gl_backend_from_argv():
+    parser = argparse.ArgumentParser(add_help=False)
+    # MuJoCo 3.x on Windows does not accept egl; glfw lets Windows Graphics
+    # Preferences route python.exe to the high-performance NVIDIA adapter.
+    default_backend = "glfw" if os.name == "nt" else "egl"
+    parser.add_argument("--gl_backend", type=str, default=default_backend, choices=["egl", "osmesa", "glfw"])
+    args, _ = parser.parse_known_args()
+    os.environ.setdefault("MUJOCO_GL", args.gl_backend)
+    return args.gl_backend
+
+
+DEFAULT_GL_BACKEND = _configure_gl_backend_from_argv()
+
 import imageio
 import mujoco as mj
 import numpy as np
@@ -65,10 +79,8 @@ def main():
     parser.add_argument("--camera_elevation", type=float, default=-12.0)
     parser.add_argument("--camera_azimuth", type=float, default=145.0)
     parser.add_argument("--follow_base", action="store_true", default=True)
-    parser.add_argument("--gl_backend", type=str, default="egl", choices=["egl", "osmesa", "glfw"])
+    parser.add_argument("--gl_backend", type=str, default=DEFAULT_GL_BACKEND, choices=["egl", "osmesa", "glfw"])
     args = parser.parse_args()
-
-    os.environ.setdefault("MUJOCO_GL", args.gl_backend)
 
     root_pos, root_rot, dof_pos, motion_fps = load_npz_motion(args.npz_file)
     output_fps = args.fps if args.fps is not None else motion_fps

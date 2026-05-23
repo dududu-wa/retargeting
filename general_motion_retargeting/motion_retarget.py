@@ -78,6 +78,7 @@ class GeneralMotionRetargeting:
         self.use_ik_match_table1 = ik_config["use_ik_match_table1"]
         self.use_ik_match_table2 = ik_config["use_ik_match_table2"]
         self.human_scale_table = ik_config["human_scale_table"]
+        self.posture_task_config = ik_config.get("posture_task", {"enabled": False})
         self.ground = ik_config["ground_height"] * np.array([0, 0, 1])
 
         self.max_iter = 10
@@ -145,6 +146,41 @@ class GeneralMotionRetargeting:
                 )
                 self.tasks2.append(task)
                 self.task_errors2[task] = []
+
+        posture_task = self.create_posture_task()
+        if posture_task is not None:
+            self.tasks1.append(posture_task)
+            self.tasks2.append(posture_task)
+
+    def create_posture_task(self):
+        if not self.posture_task_config.get("enabled", False):
+            return None
+
+        cost = np.zeros(self.model.nv)
+        # The mink PostureTask is a low-priority neutral-pose regularizer; this
+        # keeps hand/forearm tracking from borrowing waist motion in redundant
+        # or conflicting IK solves. Reference: https://kevinzakka.github.io/mink/
+        for joint_name, joint_cost in self.posture_task_config.get("costs", {}).items():
+            joint_id = mj.mj_name2id(self.model, mj.mjtObj.mjOBJ_JOINT, joint_name)
+            if joint_id < 0:
+                raise ValueError(f"posture_task references unknown joint: {joint_name}")
+            if int(self.model.jnt_type[joint_id]) == mj.mjtJoint.mjJNT_FREE:
+                continue
+            dof_id = int(self.model.jnt_dofadr[joint_id])
+            cost[dof_id] = float(joint_cost)
+
+        task = mink.PostureTask(
+            self.model,
+            cost=cost,
+            gain=float(self.posture_task_config.get("gain", 1.0)),
+            lm_damping=float(self.posture_task_config.get("lm_damping", 0.0)),
+        )
+
+        target = self.posture_task_config.get("target", "qpos0")
+        if target != "qpos0":
+            raise ValueError(f"Unsupported posture_task target: {target}")
+        task.set_target(self.model.qpos0)
+        return task
 
   
     def update_targets(self, human_data, offset_to_ground=False):
@@ -271,6 +307,10 @@ class GeneralMotionRetargeting:
         for body_name in human_data.keys():
             pos, quat = human_data[body_name]
             offset_human_data[body_name] = [pos, quat]
+            # Zero-cost IK entries do not create FrameTask offsets; keep their
+            # scaled pose available without trying to apply a missing offset.
+            if body_name not in pos_offsets or body_name not in rot_offsets:
+                continue
             # apply rotation offset first
             updated_quat = (R.from_quat(quat, scalar_first=True) * rot_offsets[body_name]).as_quat(scalar_first=True)
             offset_human_data[body_name][1] = updated_quat
