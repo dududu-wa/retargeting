@@ -8,7 +8,7 @@
     "use_ik_match_table2": true,
     "posture_task": {
         "enabled": true,
-        "comment": "Low-priority neutral-posture regularization. Based on mink PostureTask docs: posture tasks bias redundant/conflicting IK solutions toward a target posture while FrameTasks keep tracking motion. Arm-pitch target_offsets are a small qpos-space bias to lower the forearms without changing torso FrameTask weights.",
+        "comment": "Low-priority neutral-posture regularization. Based on mink PostureTask docs: posture tasks bias redundant/conflicting IK solutions toward a target posture while FrameTasks keep tracking motion. Arm-pitch target_offsets are a small qpos-space bias to lower the forearms without changing torso FrameTask weights. Leg costs are intentionally tiny and only discourage joint-limit knee/ankle collapse when task-space constraints are underdetermined or conflicting.",
         "gain": 1.0,
         "lm_damping": 0.0,
         "target": "qpos0",
@@ -20,17 +20,31 @@
             "waist_yaw_joint": 0.0,
             "waist_pitch_joint": 0.0,
 
-            "left_shoulder_pitch_joint": 0.05,
-            "left_shoulder_roll_joint": 0.05,
-            "left_shoulder_yaw_joint": 0.05,
-            "left_arm_pitch_joint": 0.05,
-            "left_arm_yaw_joint": 0.05,
+            "left_hip_pitch_joint": 0.02,
+            "left_hip_roll_joint": 0.02,
+            "left_hip_yaw_joint": 0.02,
+            "left_knee_joint": 0.05,
+            "left_ankle_pitch_joint": 0.02,
+            "left_ankle_roll_joint": 0.02,
 
-            "right_shoulder_pitch_joint": 0.05,
-            "right_shoulder_roll_joint": 0.05,
-            "right_shoulder_yaw_joint": 0.05,
-            "right_arm_pitch_joint": 0.05,
-            "right_arm_yaw_joint": 0.05
+            "right_hip_pitch_joint": 0.02,
+            "right_hip_roll_joint": 0.02,
+            "right_hip_yaw_joint": 0.02,
+            "right_knee_joint": 0.05,
+            "right_ankle_pitch_joint": 0.02,
+            "right_ankle_roll_joint": 0.02,
+
+            "left_shoulder_pitch_joint": 0.02,
+            "left_shoulder_roll_joint": 0.02,
+            "left_shoulder_yaw_joint": 0.02,
+            "left_arm_pitch_joint": 0.02,
+            "left_arm_yaw_joint": 0.02,
+
+            "right_shoulder_pitch_joint": 0.02,
+            "right_shoulder_roll_joint": 0.02,
+            "right_shoulder_yaw_joint": 0.02,
+            "right_arm_pitch_joint": 0.02,
+            "right_arm_yaw_joint": 0.02
         }
     },
     "direction_tasks": [
@@ -40,7 +54,7 @@
             "human_end_body": "LeftHand",
             "robot_start_body": "left_arm_pitch_link",
             "robot_end_body": "left_hand_roll_link",
-            "cost": 2.0,
+            "cost": 4.0,
             "gain": 0.7,
             "lm_damping": 0.0
         },
@@ -50,14 +64,43 @@
             "human_end_body": "RightHand",
             "robot_start_body": "right_arm_pitch_link",
             "robot_end_body": "right_hand_roll_link",
-            "cost": 2.0,
+            "cost": 4.0,
+            "gain": 0.7,
+            "lm_damping": 0.0
+        },
+        {
+            "comment": "Second-pass torso-line direction task. It aligns the robot base-to-head direction with the BVH Hips-to-Head direction, which protects floor/roll jump poses where local joint orientation alone can admit an upright sitting IK solution.",
+            "human_start_body": "Hips",
+            "human_end_body": "Head",
+            "robot_start_body": "base_link",
+            "robot_end_body": "head_pitch_link",
+            "cost": 30.0,
             "gain": 0.7,
             "lm_damping": 0.0
         }
     ],
+    "adaptive_task_costs": {
+        "enabled": true,
+        "comment": "When the source BVH is a low floor/roll pose, reduce ankle tasks so root and torso orientation remain faithful to the BVH. This follows the resolved-rate IK principle of relaxing conflicting soft tasks rather than clamping the torso.",
+        "human_head_body": "Spine2",
+        "human_foot_bodies": ["LeftFootMod", "RightFootMod"],
+        "hip_height_threshold": 0.35,
+        "head_height_threshold": 0.85,
+        "frame_scales": {
+            "left_ankle_roll_link": {
+                "position": 0.10,
+                "orientation": 0.10
+            },
+            "right_ankle_roll_link": {
+                "position": 0.10,
+                "orientation": 0.10
+            }
+        }
+    },
     "human_scale_table": {
         "Hips": 0.85,
         "Spine2": 0.85,
+        "Head": 0.85,
 
         "LeftUpLeg": 0.85,
         "RightUpLeg": 0.85,

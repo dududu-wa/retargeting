@@ -79,10 +79,11 @@ This JSON config maps LAFAN1 BVH bones to R2V2 MuJoCo bodies. Each task entry is
   position cost to `0`. These are fixed downstream bodies in the no-hand model,
   so hand end-body tracking would over-constrain the shoulder/elbow chain and
   borrow torso motion.
-- `posture_task.costs`: waist joints use cost `0`, while shoulder and arm joints
-  use cost `0.05`. This keeps the arm solution near neutral only when the motion
-  targets leave redundant freedom; it is intentionally weaker than the main
-  `FrameTask` tracking costs.
+- `posture_task.costs`: waist joints use cost `0`; hip and ankle joints use
+  small `0.02` costs and knee joints use `0.05` to discourage joint-limit
+  knee/ankle collapse in underdetermined IK frames; shoulder and arm joints use
+  `0.02`. These costs are intentionally weaker than the main `FrameTask`
+  tracking costs and do not impose an upright torso.
 - `posture_task.target_offsets`: adds a small `+0.2` rad qpos-space target bias
   to both R2V2 `arm_pitch_joint`s. Local diagnostics showed this lowers the walk
   hands/forearms by about 1.4-1.5 cm while leaving the body-angle task
@@ -90,7 +91,13 @@ This JSON config maps LAFAN1 BVH bones to R2V2 MuJoCo bodies. Each task entry is
 - `direction_tasks`: second-pass elbow-to-hand direction constraints. These
   align each robot forearm direction with the matching BVH forearm-to-hand
   direction without enforcing full wrist orientation, which would over-constrain
-  the R2V2 no-hand model.
+  the R2V2 no-hand model. The same mechanism is also used for a torso-line
+  `Hips -> Head` direction task so floor/roll jump poses preserve the BVH body
+  line instead of settling into an upright sitting solution.
+- `adaptive_task_costs`: Optional low-pose task relaxation. When the source BVH
+  head or hip is close to the feet, ankle task weights are reduced so root and
+  torso orientation can keep following BVH floor/roll poses instead of being
+  pulled into an upright sitting solution by conflicting foot constraints.
 
 ## Relevant Runtime Files
 
@@ -112,13 +119,22 @@ This JSON config maps LAFAN1 BVH bones to R2V2 MuJoCo bodies. Each task entry is
   table, MuJoCo joint limits, and task lists.
 - `setup_retarget_configuration`: Converts each IK table entry into a
   `mink.FrameTask` with position and orientation costs, then appends optional
-  second-pass `BodyDirectionTask`s from `direction_tasks`.
+  second-pass `BodyDirectionTask`s from `direction_tasks`. It also records
+  second-pass frame-task costs so adaptive low-pose weighting can restore the
+  original costs outside floor/roll frames.
 - `create_posture_task`: Builds the optional `mink.PostureTask` from the IK
   config, maps joint names to MuJoCo DoF indices, targets `model.qpos0` plus
   optional `target_offsets`, and raises an error if a configured joint name does
   not exist.
 - `update_targets`: Scales human data, applies position/rotation offsets, and
   writes target SE(3) poses into the active IK tasks.
+- `update_adaptive_task_costs`: Detects low BVH floor/roll poses from the
+  configured upper-body marker, currently `Spine2`, and hip height above the
+  feet. In those frames it lowers configured
+  ankle task costs with `mink.FrameTask.set_position_cost` and
+  `set_orientation_cost`; otherwise it restores the original gait tracking
+  costs. This relaxes conflicting soft IK constraints without changing waist
+  tracking or clamping body angle.
 - `retarget`: Solves the two-stage IK problem with `mink.solve_ik`, integrates
   the result into MuJoCo `qpos`, and returns a copy of that `qpos`.
 - `scale_human_data`: Scales each tracked human bone relative to the human root.
@@ -151,6 +167,28 @@ This JSON config maps LAFAN1 BVH bones to R2V2 MuJoCo bodies. Each task entry is
 - Steps the optional viewer.
 - Saves either legacy `.pkl` fields or the expanded `.npz` fields from
   `build_npz_motion_data`.
+
+### `scripts/validate_lafan1_r2v2_npz.py`
+
+- `unit`, `angle_deg`, `joint_angle_deg`: Vector helpers for direction and
+  elbow-angle metrics.
+- `bvh_positions`: Extracts named joint positions from loaded LAFAN1 frames.
+- `robot_positions`: Replays each `.npz` frame through MuJoCo forward
+  kinematics and collects named body positions.
+- `summarize_file`: Validates one BVH/NPZ pair. It checks frame counts, DoF
+  width, finite values, joint-limit margins, torso/head direction errors,
+  elbow-angle errors, forearm-direction errors, and low-body fall/kneel proxy
+  counts. The proxy checks compare robot low poses against BVH low poses so
+  real crouch or landing frames are not counted as conversion failures. The BVH
+  low-pose filter uses source head, hip, and knee height above the lower foot so
+  jump landings and intentional low poses are separated from robot-only
+  collapse; the robot kneel proxy requires the knee center to be within
+  `0.10 m` of the lower ankle/foot frame while the base is also low, avoiding
+  false positives from normal running flexion.
+- `main`: Finds all `walk*`, `run*`, and `jumps*` BVH files in an input folder,
+  matches same-name `.npz` files, prints per-file metrics, optionally writes a
+  CSV report, and exits non-zero if any target file is missing or any
+  non-BVH-low fall/kneel proxy frame remains.
 
 ### `scripts/npz_to_robot_video_offscreen.py`
 

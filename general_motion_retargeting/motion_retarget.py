@@ -162,6 +162,7 @@ class GeneralMotionRetargeting:
         self.human_scale_table = ik_config["human_scale_table"]
         self.posture_task_config = ik_config.get("posture_task", {"enabled": False})
         self.direction_task_config = ik_config.get("direction_tasks", [])
+        self.adaptive_task_cost_config = ik_config.get("adaptive_task_costs", {"enabled": False})
         self.ground = ik_config["ground_height"] * np.array([0, 0, 1])
 
         self.max_iter = 10
@@ -179,6 +180,8 @@ class GeneralMotionRetargeting:
         self.task_errors1 = {}
         self.task_errors2 = {}
         self.human_bodies_to_direction_tasks = []
+        self.frame_tasks2_by_robot_body = {}
+        self.frame_task2_costs = {}
 
         self.ik_limits = [mink.ConfigurationLimit(self.model)]
         if use_velocity_limit:
@@ -230,6 +233,8 @@ class GeneralMotionRetargeting:
                 )
                 self.tasks2.append(task)
                 self.task_errors2[task] = []
+                self.frame_tasks2_by_robot_body[frame_name] = task
+                self.frame_task2_costs[frame_name] = (pos_weight, rot_weight)
 
         posture_task = self.create_posture_task()
         if posture_task is not None:
@@ -324,6 +329,46 @@ class GeneralMotionRetargeting:
             start_pos = human_data[human_start][0]
             end_pos = human_data[human_end][0]
             task.set_target_direction(end_pos - start_pos)
+
+        self.update_adaptive_task_costs(human_data)
+
+    def update_adaptive_task_costs(self, human_data):
+        if not self.adaptive_task_cost_config.get("enabled", False):
+            return
+
+        foot_names = self.adaptive_task_cost_config.get(
+            "human_foot_bodies", ["LeftFootMod", "RightFootMod"]
+        )
+        head_name = self.adaptive_task_cost_config.get("human_head_body", "Spine2")
+        if self.human_root_name not in human_data or head_name not in human_data:
+            return
+        if any(name not in human_data for name in foot_names):
+            return
+
+        foot_z = min(float(human_data[name][0][2]) for name in foot_names)
+        hip_rel = float(human_data[self.human_root_name][0][2] - foot_z)
+        head_rel = float(human_data[head_name][0][2] - foot_z)
+        low_pose = (
+            hip_rel < float(self.adaptive_task_cost_config.get("hip_height_threshold", 0.35))
+            or head_rel < float(self.adaptive_task_cost_config.get("head_height_threshold", 0.85))
+        )
+
+        for frame_name, scales in self.adaptive_task_cost_config.get("frame_scales", {}).items():
+            task = self.frame_tasks2_by_robot_body.get(frame_name)
+            if task is None:
+                continue
+            base_position_cost, base_orientation_cost = self.frame_task2_costs[frame_name]
+            if low_pose:
+                position_cost = base_position_cost * float(scales.get("position", 1.0))
+                orientation_cost = base_orientation_cost * float(scales.get("orientation", 1.0))
+            else:
+                position_cost = base_position_cost
+                orientation_cost = base_orientation_cost
+            # Mink FrameTask exposes cost setters, so low-pose retargeting can
+            # reduce over-constraining contacts while retaining normal gait
+            # foot tracking outside floor/roll poses.
+            task.set_position_cost(position_cost)
+            task.set_orientation_cost(orientation_cost)
             
             
     def retarget(self, human_data, offset_to_ground=False):
